@@ -29,7 +29,7 @@ impl Cpu {
         }
     }
     
-    pub fn run<T: Read>(&mut self, mut reader: T) {
+    pub fn run<T: Read>(&mut self, reader: T) {
         for (index, byte) in reader.bytes().enumerate() {
             let b = byte.unwrap();
             self.memory[index + 0x200] = b;
@@ -51,10 +51,26 @@ impl Cpu {
             (self.memory[(self.pc + 1) as usize]) as u16;
         
         match opcode & 0xF000 {
-            0x6000 => self.set_register(opcode),
+            0x3000 => self.skip_if_equals_constant(opcode),
+            0x4000 => self.skip_if_not_equals_constant(opcode),
+            0x5000 => {
+                match opcode & 0x000F {
+                    0x0000 => self.skip_if_equals_v(opcode),
+                    _ => {},
+                }
+            },
+            0x6000 => self.set_register_constant(opcode),
             0x7000 => self.add_to_register(opcode),
-            0x8000 => 
-            _ => {}
+            0x8000 => {
+                match opcode & 0x000F {
+                    0x0000 => self.set_register_value(opcode),
+                    0x0001 => self.set_register_or(opcode),
+                    0x0002 => self.set_register_and(opcode),
+                    0x0003 => self.set_register_xor(opcode),
+                    _ => {},
+                }
+            },
+            _ => {},
         }
         
         self.pc += 2;
@@ -68,13 +84,13 @@ impl Cpu {
         2NNN	Calls subroutine at NNN.
 DONE    3XNN	Skips the next instruction if VX equals NN.
 DONE    4XNN	Skips the next instruction if VX doesn't equal NN.
-        5XY0	Skips the next instruction if VX equals VY.
+DONE    5XY0	Skips the next instruction if VX equals VY.
 DONE    6XNN	Sets VX to NN. 
 DONE    7XNN	Adds NN to VX.
-        8XY0	Sets VX to the value of VY.
-        8XY1	Sets VX to VX or VY.
-        8XY2	Sets VX to VX and VY.
-        8XY3	Sets VX to VX xor VY.
+DONE    8XY0	Sets VX to the value of VY.
+DONE    8XY1	Sets VX to VX or VY.
+DONE    8XY2	Sets VX to VX and VY.
+DONE    8XY3	Sets VX to VX xor VY.
         8XY4	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
         8XY5	VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
         8XY6	Shifts VX right by one. VF is set to the value of the least significant bit of VX before the shift.[2]
@@ -98,31 +114,57 @@ DONE    7XNN	Adds NN to VX.
         FX65	Fills V0 to VX with values from memory starting at address I.[4]
     */
     
-    fn set_register(&mut self, opcode: u16) {
-        self.v[((opcode & 0x0F00) >> 8) as usize] = (opcode & 0x00FF) as u8;
-        println!("Set register due to opcode {:X}", opcode);
+    fn set_register_constant(&mut self, opcode: u16) {
+        self.v[self.opcode_digit(opcode, 2)] = (opcode & 0x00FF) as u8;
     }
     
     fn add_to_register(&mut self, opcode: u16) {
-        self.v[((opcode & 0x0F00) >> 8) as usize] += (opcode & 0x00FF) as u8;
-        println!("Add register due to opcode {:X}", opcode);
+        self.v[self.opcode_digit(opcode, 2)] += (opcode & 0x00FF) as u8;
     }
     
     // These should probably accept a function as an argument
     fn skip_if_equals_constant(&mut self, opcode: u16) {
-        if (self.v[((opcode & 0x0F00) >> 8) as usize] == (opcode & 0x00FF) as u8) {
+        if self.v[self.opcode_digit(opcode, 2)] == (opcode & 0x00FF) as u8 {
             self.pc += 2;
         }
     }
     
     fn skip_if_not_equals_constant(&mut self, opcode: u16) {
-        if (self.v[((opcode & 0x0F00) >> 8) as usize] != (opcode & 0x00FF) as u8) {
+        if self.v[self.opcode_digit(opcode, 2)] != (opcode & 0x00FF) as u8 {
             self.pc += 2;
         }
     }
     
     fn skip_if_equals_v(&mut self, opcode: u16) {
+        if self.v[self.opcode_digit(opcode, 2)] == self.v[self.opcode_digit(opcode, 3)] {
+            self.pc += 2;
+        }
+    }
     
+    fn set_register_value(&mut self, opcode: u16) {
+        self.v[self.opcode_digit(opcode, 2)] = self.v[self.opcode_digit(opcode, 3)];
+    }
+    
+    fn set_register_or(&mut self, opcode: u16) {
+        self.v[self.opcode_digit(opcode, 2)] |= self.v[self.opcode_digit(opcode, 3)];
+    }
+    
+    fn set_register_and(&mut self, opcode: u16) {
+        self.v[self.opcode_digit(opcode, 2)] &= self.v[self.opcode_digit(opcode, 3)];
+    }
+    
+    fn set_register_xor(&mut self, opcode: u16) {
+        self.v[self.opcode_digit(opcode, 2)] ^= self.v[self.opcode_digit(opcode, 3)];
+    }
+    
+    fn opcode_digit(&self, opcode: u16, digit: u8) -> usize {
+        match digit {
+            1 => ((opcode & 0xF000) >> 12) as usize,
+            2 => ((opcode & 0x0F00) >> 8) as usize,
+            3 => ((opcode & 0x00F0) >> 4) as usize,
+            4 => (opcode & 0x000F) as usize,
+            _ => 0 as usize
+        }
     }
     
 }
