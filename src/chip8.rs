@@ -70,6 +70,8 @@ impl Cpu {
                     _ => {},
                 }
             },
+            0x9000 => self.skip_if_not_equals_v(opcode),
+            0xA000 => self.set_i_to_opcode(opcode),
             _ => {},
         }
         
@@ -141,6 +143,12 @@ DONE    8XY3	Sets VX to VX xor VY.
         }
     }
     
+    fn skip_if_not_equals_v(&mut self, opcode: u16) {
+        if self.v[self.opcode_digit(opcode, 2)] != self.v[self.opcode_digit(opcode, 3)] {
+            self.pc += 2;
+        }
+    }
+    
     fn set_register_value(&mut self, opcode: u16) {
         self.v[self.opcode_digit(opcode, 2)] = self.v[self.opcode_digit(opcode, 3)];
     }
@@ -155,6 +163,10 @@ DONE    8XY3	Sets VX to VX xor VY.
     
     fn set_register_xor(&mut self, opcode: u16) {
         self.v[self.opcode_digit(opcode, 2)] ^= self.v[self.opcode_digit(opcode, 3)];
+    }
+    
+    fn set_i_to_opcode(&mut self, opcode: u16) {
+        self.i = opcode & 0x0FFF
     }
     
     fn opcode_digit(&self, opcode: u16, digit: u8) -> usize {
