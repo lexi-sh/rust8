@@ -3,13 +3,13 @@ use std::io::Read;
 pub struct Cpu {
     v: [u8; 16],
     memory: [u8; 4048],
-    stack_pointer: [u8; 64],
+    stack: [u16; 64],
     delay_timer: u8,
     sound_timer: u8,
     gfx: [[bool; 32]; 64],
-    i: u8,
+    i: u16,
     pc: u16,
-    sp: u8,
+    sp: u16,
     keys: [bool; 16],
 }
 
@@ -18,7 +18,7 @@ impl Cpu {
         Cpu {
             v: [0; 16],
             memory: [0; 4048],
-            stack_pointer: [0; 64],
+            stack: [0; 64],
             delay_timer: 0,
             sound_timer: 0,
             gfx: [[false; 32]; 64],
@@ -51,6 +51,14 @@ impl Cpu {
             (self.memory[(self.pc + 1) as usize]) as u16;
         
         match opcode & 0xF000 {
+            0x0000 => {
+                match opcode & 0xFFF {
+                    0x00EE => self.return_from_subroutine(),
+                    _ => {}
+                }
+            },
+            0x1000 => self.jump_to_address(opcode),
+            0x2000 => self.call_subroutine(opcode),
             0x3000 => self.skip_if_equals_constant(opcode),
             0x4000 => self.skip_if_not_equals_constant(opcode),
             0x5000 => {
@@ -67,10 +75,16 @@ impl Cpu {
                     0x0001 => self.set_register_or(opcode),
                     0x0002 => self.set_register_and(opcode),
                     0x0003 => self.set_register_xor(opcode),
+                    0x0004 => self.add(opcode),
                     _ => {},
                 }
             },
-            0x9000 => self.skip_if_not_equals_v(opcode),
+            0x9000 => {
+                match opcode & 0x000F {
+                    0x0000 => self.skip_if_not_equals_v(opcode),
+                    _ => {},
+                }
+            },
             0xA000 => self.set_i_to_opcode(opcode),
             _ => {},
         }
@@ -81,9 +95,9 @@ impl Cpu {
     /*
         0NNN	Calls RCA 1802 program at address NNN. Not necessary for most ROMs.
         00E0	Clears the screen.
-        00EE	Returns from a subroutine.
-        1NNN	Jumps to address NNN.
-        2NNN	Calls subroutine at NNN.
+DONE    00EE	Returns from a subroutine.
+DONE    1NNN	Jumps to address NNN.
+DONE    2NNN	Calls subroutine at NNN.
 DONE    3XNN	Skips the next instruction if VX equals NN.
 DONE    4XNN	Skips the next instruction if VX doesn't equal NN.
 DONE    5XY0	Skips the next instruction if VX equals VY.
@@ -98,8 +112,8 @@ DONE    8XY3	Sets VX to VX xor VY.
         8XY6	Shifts VX right by one. VF is set to the value of the least significant bit of VX before the shift.[2]
         8XY7	Sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
         8XYE	Shifts VX left by one. VF is set to the value of the most significant bit of VX before the shift.[2]
-        9XY0	Skips the next instruction if VX doesn't equal VY.
-        ANNN	Sets I to the address NNN.
+DONE    9XY0	Skips the next instruction if VX doesn't equal VY.
+DONE    ANNN	Sets I to the address NNN.
         BNNN	Jumps to the address NNN plus V0.
         CXNN	Sets VX to the result of a bitwise and operation on a random number and NN.
         DXYN	Sprites stored in memory at location in index register (I), 8bits wide. Wraps around the screen. If when drawn, clears a pixel, register VF is set to 1 otherwise it is zero. All drawing is XOR drawing (i.e. it toggles the screen pixels). Sprites are drawn starting at position VX, VY. N is the number of 8bit rows that need to be drawn. If N is greater than 1, second line continues at position VX, VY+1, and so on.
@@ -166,7 +180,33 @@ DONE    8XY3	Sets VX to VX xor VY.
     }
     
     fn set_i_to_opcode(&mut self, opcode: u16) {
-        self.i = opcode & 0x0FFF
+        self.i = opcode & 0x0FFF;
+    }
+    
+    fn call_subroutine(&mut self, opcode: u16) {
+        self.stack[self.sp as usize] = self.pc;
+        self.sp += 1;
+        self.jump_to_address(opcode);
+    }
+    
+    fn jump_to_address(&mut self, opcode: u16) {
+        self.pc = (opcode & 0x0FFF) - 2; // program counter increments by 2 afterwards, always   
+    }
+    
+    fn return_from_subroutine(&mut self) {
+        self.sp -= 1;
+        self.pc = self.stack[self.sp as usize];
+    }
+    
+    fn add(&mut self, opcode: u16) {
+        if self.v[self.opcode_digit(opcode, 3)] > (0xFF - self.v[self.opcode_digit(opcode, 2)]) {
+            self.v[0xF] = 1;
+        }
+        else {
+            self.v[0xF] = 0;
+        }
+        self.v[self.opcode_digit(opcode, 2)] = 
+            self.v[self.opcode_digit(opcode, 2)].wrapping_add(self.v[self.opcode_digit(opcode, 3)]);
     }
     
     fn opcode_digit(&self, opcode: u16, digit: u8) -> usize {
