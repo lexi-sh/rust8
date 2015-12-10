@@ -76,6 +76,7 @@ impl Cpu {
                     0x0002 => self.set_register_and(opcode),
                     0x0003 => self.set_register_xor(opcode),
                     0x0004 => self.add(opcode),
+                    0x0005 => self.subtract(opcode),
                     _ => {},
                 }
             },
@@ -107,8 +108,8 @@ DONE    8XY0	Sets VX to the value of VY.
 DONE    8XY1	Sets VX to VX or VY.
 DONE    8XY2	Sets VX to VX and VY.
 DONE    8XY3	Sets VX to VX xor VY.
-        8XY4	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
-        8XY5	VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
+DONE    8XY4	Adds VY to VX. VF is set to 1 when there's a carry, and to 0 when there isn't.
+DONE    8XY5	VY is subtracted from VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
         8XY6	Shifts VX right by one. VF is set to the value of the least significant bit of VX before the shift.[2]
         8XY7	Sets VX to VY minus VX. VF is set to 0 when there's a borrow, and 1 when there isn't.
         8XYE	Shifts VX left by one. VF is set to the value of the most significant bit of VX before the shift.[2]
@@ -207,6 +208,38 @@ DONE    ANNN	Sets I to the address NNN.
         }
         self.v[self.opcode_digit(opcode, 2)] = 
             self.v[self.opcode_digit(opcode, 2)].wrapping_add(self.v[self.opcode_digit(opcode, 3)]);
+    }
+    
+    fn subtract_x_minus_y(&mut self, opcode: u16) {
+        if self.v[self.opcode_digit(opcode, 2)] > (self.v[self.opcode_digit(opcode, 3)]) {
+            self.v[0xF] = 1;
+        }
+        else {
+            self.v[0xF] = 0;
+        }
+        self.v[self.opcode_digit(opcode, 2)] = 
+            self.v[self.opcode_digit(opcode, 2)].wrapping_sub(self.v[self.opcode_digit(opcode, 3)]);
+    }
+    
+    fn subtract_y_minus_x(&mut self, opcode: u16) {
+        if self.v[self.opcode_digit(opcode, 2)] > (self.v[self.opcode_digit(opcode, 3)]) {
+            self.v[0xF] = 1;
+        }
+        else {
+            self.v[0xF] = 0;
+        }
+        self.v[self.opcode_digit(opcode, 2)] = 
+            self.v[self.opcode_digit(opcode, 2)].wrapping_sub(self.v[self.opcode_digit(opcode, 3)]);
+    }
+    
+    fn right_shift(&mut self, opcode: u16) {
+        self.v[0xF] = self.v[self.opcode_digit(opcode, 2)] & 0x1; 
+        self.v[self.opcode_digit(opcode, 2)] >>= 1;
+    }
+    
+    fn left_shift(&mut self, opcode: u16) {
+        self.v[0xF] = self.v[self.opcode_digit(opcode, 2)] >> 7; 
+        self.v[self.opcode_digit(opcode, 2)] <<= 1;
     }
     
     fn opcode_digit(&self, opcode: u16, digit: u8) -> usize {
