@@ -45,7 +45,7 @@ impl Cpu {
         }
     }
     
-    fn emulate_cycle(&mut self) {
+    pub fn emulate_cycle(&mut self) {
         let opcode: u16 = 
             ((self.memory[self.pc as usize]) as u16) << 8 | 
             (self.memory[(self.pc + 1) as usize]) as u16;
@@ -77,6 +77,7 @@ impl Cpu {
                     0x0003 => self.set_register_xor(opcode),
                     0x0004 => self.add(opcode),
                     0x0005 => self.subtract(opcode),
+                    0x0006 => self.right_shift(opcode),
                     _ => {},
                 }
             },
@@ -210,18 +211,7 @@ DONE    ANNN	Sets I to the address NNN.
             self.v[self.opcode_digit(opcode, 2)].wrapping_add(self.v[self.opcode_digit(opcode, 3)]);
     }
     
-    fn subtract_x_minus_y(&mut self, opcode: u16) {
-        if self.v[self.opcode_digit(opcode, 2)] > (self.v[self.opcode_digit(opcode, 3)]) {
-            self.v[0xF] = 1;
-        }
-        else {
-            self.v[0xF] = 0;
-        }
-        self.v[self.opcode_digit(opcode, 2)] = 
-            self.v[self.opcode_digit(opcode, 2)].wrapping_sub(self.v[self.opcode_digit(opcode, 3)]);
-    }
-    
-    fn subtract_y_minus_x(&mut self, opcode: u16) {
+    fn subtract(&mut self, opcode: u16) {
         if self.v[self.opcode_digit(opcode, 2)] > (self.v[self.opcode_digit(opcode, 3)]) {
             self.v[0xF] = 1;
         }
@@ -252,4 +242,22 @@ DONE    ANNN	Sets I to the address NNN.
         }
     }
     
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cpu;
+
+    #[test]
+    fn test_6xnn() {
+        let mut cpu = Cpu::new();
+        load_opcode(&mut cpu, 0x65de);
+        cpu.emulate_cycle();
+        assert_eq!(cpu.v[0x5], 0xde, "After 0x65de, v[0x5] should be 0xde. Instead, it was {}", cpu.v[0x5]);
+    }
+
+    fn load_opcode(cpu: &mut Cpu, opcode: u16) {
+        cpu.memory[0x200] = ((opcode & 0xFF00) >> 8) as u8;
+        cpu.memory[0x201] = (opcode & 0x00FF) as u8;
+    }
 }
