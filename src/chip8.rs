@@ -253,7 +253,18 @@ mod tests {
         let mut cpu = Cpu::new();
         load_opcode(&mut cpu, 0x65de);
         cpu.emulate_cycle();
-        assert_eq!(cpu.v[0x5], 0xde, "After 0x65de, v[0x5] should be 0xde. Instead, it was {}", cpu.v[0x5]);
+        assert_eq!(cpu.v[0x5], 0xde);
+    }
+
+    #[test]
+    fn test_7xnn() {
+        let mut cpu = Cpu::new();
+        load_opcode(&mut cpu, 0x6545);
+        cpu.emulate_cycle();
+        load_opcode(&mut cpu, 0x7504);
+        cpu.emulate_cycle();
+        
+        assert_eq!(cpu.v[0x5], 0x49);
     }
 
     fn load_opcode(cpu: &mut Cpu, opcode: u16) {
